@@ -1,0 +1,97 @@
+# RAG System Configuration
+# ========================
+
+app:
+  name: "RAG POC"
+  version: "1.0.0"
+  debug: false
+  log_level: "INFO"
+
+# --- Ingestion ---
+ingestion:
+  chunk_size: 512
+  chunk_overlap: 64
+  chunking_strategy: "semantic"   # Options: semantic | fixed | sentence
+  min_chunk_size: 50
+  supported_extensions:
+    - ".pdf"
+    - ".md"
+    - ".txt"
+
+# --- Embedding ---
+embedding:
+  provider: "sentence_transformers"   # Options: openai | sentence_transformers
+  model_name: "all-MiniLM-L6-v2"
+  # OpenAI alternative: "text-embedding-3-small"
+  batch_size: 64
+  cache_enabled: true
+  cache_dir: ".cache/embeddings"
+
+# --- Vector Store ---
+vector_store:
+  provider: "faiss"   # Options: faiss | chroma
+  index_path: ".cache/faiss_index"
+  chroma_persist_dir: ".cache/chroma"
+  collection_name: "rag_documents"
+  top_k: 20   # Initial candidates before reranking
+
+# --- Retrieval ---
+retrieval:
+  strategy: "hybrid"   # Options: hybrid | dense | bm25 | hyde
+  hyde_enabled: true
+  mmr_enabled: true
+  mmr_lambda: 0.5         # Balance between relevance (1.0) and diversity (0.0)
+  bm25_weight: 0.3        # Weight for BM25 in hybrid search
+  dense_weight: 0.7       # Weight for dense vector in hybrid search
+  final_top_k: 5          # Documents returned after reranking
+
+# --- Reranking ---
+reranking:
+  enabled: true
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  top_n: 5
+
+# --- Generation ---
+generation:
+  provider: "openai"
+  model: "gpt-4o-mini"
+  temperature: 0.0
+  max_tokens: 1024
+  streaming: true
+  system_prompt: |
+    You are a precise and helpful assistant. Answer questions using ONLY the 
+    provided context. Always cite your sources. If the context does not contain 
+    enough information, explicitly say so. Do not hallucinate facts.
+
+# --- Query Rewriting ---
+query_rewriting:
+  enabled: true
+  model: "gpt-4o-mini"
+  num_variants: 3
+
+# --- Evaluation ---
+evaluation:
+  dataset_path: "evaluation/dataset.json"
+  results_path: "evaluation/results.json"
+  report_path: "evaluation/report.md"
+  metrics:
+    - faithfulness
+    - answer_relevancy
+    - context_precision
+    - context_recall
+
+# --- API ---
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+
+# --- Observability ---
+observability:
+  langsmith_enabled: false
+  langsmith_project: "rag-poc"
+  log_queries: true
+  log_latency: true

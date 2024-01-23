@@ -1,0 +1,72 @@
+[
+  {
+    "id": "eval_001",
+    "question": "What is Retrieval-Augmented Generation (RAG)?",
+    "ground_truth": "RAG is a technique that combines information retrieval with language model generation. It retrieves relevant documents from a knowledge base and uses them as context for generating accurate, grounded answers.",
+    "relevant_document": "rag_overview.md",
+    "category": "definition"
+  },
+  {
+    "id": "eval_002",
+    "question": "What are the main components of a RAG system?",
+    "ground_truth": "A RAG system consists of: (1) a document ingestion pipeline that loads and chunks documents, (2) an embedding model that converts text to vectors, (3) a vector store for similarity search, (4) a retrieval layer that finds relevant chunks, and (5) a language model that generates answers from retrieved context.",
+    "relevant_document": "rag_architecture.md",
+    "category": "architecture"
+  },
+  {
+    "id": "eval_003",
+    "question": "How does HyDE improve retrieval performance?",
+    "ground_truth": "HyDE (Hypothetical Document Embeddings) improves retrieval by generating a hypothetical answer document using an LLM, then using the embedding of that hypothetical document to search the vector store. This bridges the vocabulary gap between sparse queries and rich document content.",
+    "relevant_document": "retrieval_strategies.md",
+    "category": "retrieval"
+  },
+  {
+    "id": "eval_004",
+    "question": "What is the difference between dense and sparse retrieval?",
+    "ground_truth": "Dense retrieval uses neural embeddings to capture semantic similarity between queries and documents. Sparse retrieval (like BM25) uses term frequency statistics for exact keyword matching. Hybrid search combines both approaches to leverage semantic understanding and exact term matching.",
+    "relevant_document": "retrieval_strategies.md",
+    "category": "retrieval"
+  },
+  {
+    "id": "eval_005",
+    "question": "Why is chunking strategy important in RAG?",
+    "ground_truth": "Chunking strategy determines how documents are split for indexing. Poor chunking can break semantic units across boundaries, losing context. Semantic chunking preserves meaning by splitting at natural topic boundaries. Chunk size and overlap affect retrieval precision and context completeness.",
+    "relevant_document": "chunking_guide.md",
+    "category": "ingestion"
+  },
+  {
+    "id": "eval_006",
+    "question": "What is Maximum Marginal Relevance (MMR)?",
+    "ground_truth": "MMR is a reranking technique that balances relevance to the query with diversity among selected documents. It prevents returning multiple near-duplicate chunks by penalizing documents too similar to already-selected ones. The lambda parameter controls the relevance-diversity tradeoff.",
+    "relevant_document": "retrieval_strategies.md",
+    "category": "retrieval"
+  },
+  {
+    "id": "eval_007",
+    "question": "How does cross-encoder reranking work?",
+    "ground_truth": "Cross-encoders jointly process the query and document together, allowing full attention between both. Unlike bi-encoders that encode query and document independently, cross-encoders produce more accurate relevance scores but are slower. The typical pattern is: retrieve top-20 candidates with fast bi-encoder, then rerank to top-5 with precise cross-encoder.",
+    "relevant_document": "reranking_guide.md",
+    "category": "reranking"
+  },
+  {
+    "id": "eval_008",
+    "question": "What metrics are used to evaluate RAG systems?",
+    "ground_truth": "RAG evaluation includes retrieval metrics (precision, recall, MRR) and generation metrics. RAGAS framework measures: faithfulness (answer grounded in context), answer relevancy (answer addresses the question), context precision (retrieved chunks are relevant), and context recall (all relevant information is retrieved).",
+    "relevant_document": "evaluation_guide.md",
+    "category": "evaluation"
+  },
+  {
+    "id": "eval_009",
+    "question": "What is embedding caching and why is it useful?",
+    "ground_truth": "Embedding caching stores computed embeddings on disk keyed by content hash. When the same text needs to be embedded again, the cached vector is returned instead of recomputing. This reduces API costs for OpenAI embeddings and speeds up re-indexing operations significantly.",
+    "relevant_document": "optimization_guide.md",
+    "category": "optimization"
+  },
+  {
+    "id": "eval_010",
+    "question": "How does query rewriting improve RAG recall?",
+    "ground_truth": "Query rewriting generates multiple reformulations of the original query using an LLM. Each variant is used to retrieve documents independently, and results are merged by deduplication. This improves recall because different phrasings match different document vocabulary, catching relevant documents that the original query might miss.",
+    "relevant_document": "retrieval_strategies.md",
+    "category": "retrieval"
+  }
+]

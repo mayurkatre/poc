@@ -8,17 +8,14 @@ Key Idea:
   answer document, then embed THAT document for retrieval. This bridges the
   query-document vocabulary gap.
 
-  Query → LLM → Hypothetical Doc → Embed → Vector Search → Real Docs
+  Query → LLM (OpenRouter) → Hypothetical Doc → Embed → Vector Search → Real Docs
 """
 
 from __future__ import annotations
 
-import os
-from typing import Optional
-
 from loguru import logger
 
-from ingestion.chunking import DocumentChunk
+from config.openrouter import get_client
 from ingestion.embedding_pipeline import BaseVectorStore, EmbeddingPipeline
 from retrieval.base_retriever import BaseRetriever, RetrievalResult
 
@@ -27,9 +24,9 @@ class HyDERetriever(BaseRetriever):
     """
     Retriever using Hypothetical Document Embeddings (HyDE).
 
-    Generates a synthetic answer using an LLM, then uses the embedding
-    of that answer to query the vector store. This dramatically improves
-    retrieval for technical or complex queries.
+    Generates a synthetic answer via OpenRouter, then uses its embedding
+    to query the vector store. Significantly improves retrieval for
+    technical or complex queries.
     """
 
     def __init__(
@@ -37,7 +34,7 @@ class HyDERetriever(BaseRetriever):
         vector_store: BaseVectorStore,
         embedding_pipeline: EmbeddingPipeline,
         top_k: int = 20,
-        llm_model: str = "gpt-4o-mini",
+        llm_model: str = "openai/gpt-4o-mini",
         temperature: float = 0.7,
     ):
         """
@@ -45,8 +42,8 @@ class HyDERetriever(BaseRetriever):
             vector_store: Indexed vector store.
             embedding_pipeline: For embedding the hypothetical document.
             top_k: Number of candidates to retrieve.
-            llm_model: OpenAI model for hypothesis generation.
-            temperature: LLM sampling temperature (higher = more diverse).
+            llm_model: OpenRouter model string (e.g. 'openai/gpt-4o-mini').
+            temperature: Higher temperature = more diverse hypotheses.
         """
         super().__init__(vector_store, embedding_pipeline, top_k)
         self.llm_model = llm_model
@@ -55,13 +52,12 @@ class HyDERetriever(BaseRetriever):
             "Please write a detailed, factual paragraph that would answer "
             "the following question. Write as if you are an expert explaining "
             "this topic. Focus on being precise and informative.\n\n"
-            "Question: {query}\n\n"
-            "Answer:"
+            "Question: {query}\n\nAnswer:"
         )
 
     def _generate_hypothetical_document(self, query: str) -> str:
         """
-        Generate a hypothetical answer document using an LLM.
+        Generate a hypothetical answer document via OpenRouter.
 
         Args:
             query: The user's question.
@@ -70,8 +66,7 @@ class HyDERetriever(BaseRetriever):
             Hypothetical answer text for embedding.
         """
         try:
-            import openai
-            client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            client = get_client()
             response = client.chat.completions.create(
                 model=self.llm_model,
                 messages=[
@@ -84,7 +79,9 @@ class HyDERetriever(BaseRetriever):
                 max_tokens=256,
             )
             hypothesis = response.choices[0].message.content.strip()
-            logger.debug(f"HyDE hypothesis: {hypothesis[:120]}...")
+            logger.debug(
+                f"HyDE hypothesis [{self.llm_model}]: {hypothesis[:120]}..."
+            )
             return hypothesis
         except Exception as e:
             logger.warning(f"HyDE generation failed: {e}. Falling back to direct query.")
@@ -100,15 +97,10 @@ class HyDERetriever(BaseRetriever):
         Returns:
             RetrievalResult with matched chunks.
         """
-        logger.info(f"HyDE retrieval for: '{query[:80]}'")
+        logger.info(f"HyDE retrieval [{self.llm_model}]: '{query[:80]}'")
 
-        # Step 1: Generate hypothetical document
         hypothesis = self._generate_hypothetical_document(query)
-
-        # Step 2: Embed the hypothesis (not the raw query)
         hypothesis_embedding = self._embed_query(hypothesis)
-
-        # Step 3: Search vector store with hypothesis embedding
         chunks = self.vector_store.search(hypothesis_embedding, top_k=self.top_k)
 
         return RetrievalResult(
@@ -117,6 +109,6 @@ class HyDERetriever(BaseRetriever):
             strategy="hyde",
             metadata={
                 "hypothesis": hypothesis,
-                "hypothesis_length": len(hypothesis),
+                "model": self.llm_model,
             },
         )

@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 import config
 from ingestion.chunking import ChunkerFactory
 from ingestion.document_loader import DocumentLoaderFactory
+from config.openrouter import get_client
 from ingestion.embedding_pipeline import (
     EmbeddingPipeline,
     create_embedder,
@@ -171,7 +172,7 @@ def _build_pipeline() -> tuple[RAGPipeline, EmbeddingPipeline, any, BM25Index]:
     pipeline = RAGPipeline(
         retriever=retriever,
         reranker=reranker,
-        llm_model=gen_cfg.get("model", "gpt-4o-mini"),
+        llm_model=gen_cfg.get("model", "openai/gpt-4o-mini"),
         temperature=gen_cfg.get("temperature", 0.0),
         max_tokens=gen_cfg.get("max_tokens", 1024),
         streaming=gen_cfg.get("streaming", True),

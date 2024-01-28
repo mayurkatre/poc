@@ -104,7 +104,7 @@ def _build_pipeline(cfg: dict) -> RAGPipeline:
     pipeline = RAGPipeline(
         retriever=retriever,
         reranker=reranker,
-        llm_model=gen_cfg.get("model", "gpt-4o-mini"),
+        llm_model=gen_cfg.get("model", "openai/gpt-4o-mini"),
         temperature=0.0,
         query_rewriting_enabled=False,  # Disable during eval for consistency
         cache_enabled=False,
@@ -176,7 +176,8 @@ def run(
     # Load config and build pipeline
     cfg = config.get_settings()
     pipeline = _build_pipeline(cfg)
-    judge = LLMJudge(model="gpt-4o-mini") if not skip_generation_eval else None
+    judge_model = cfg.get("evaluation", {}).get("judge_model", "openai/gpt-4o-mini")
+    judge = LLMJudge(model=judge_model) if not skip_generation_eval else None
 
     # Load dataset
     dataset_path = Path(dataset)

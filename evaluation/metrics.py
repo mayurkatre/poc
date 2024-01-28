@@ -4,11 +4,9 @@ RAG Evaluation Metrics
 Implements evaluation metrics for retrieval and generation quality.
 
 Retrieval Metrics:
-  - Precision@K: Fraction of retrieved docs that are relevant
-  - Recall@K: Fraction of relevant docs that are retrieved
-  - MRR: Mean Reciprocal Rank
+  - Precision@K, Recall@K, MRR
 
-Generation Metrics (LLM-as-judge):
+Generation Metrics (LLM-as-judge via OpenRouter):
   - Faithfulness: Is the answer grounded in the retrieved context?
   - Answer Relevancy: Does the answer address the question?
   - Context Precision: Are the retrieved chunks actually useful?
@@ -17,12 +15,14 @@ Generation Metrics (LLM-as-judge):
 
 from __future__ import annotations
 
-import os
+import math
 import re
-from dataclasses import dataclass, field
-from typing import Optional
+from collections import defaultdict
+from dataclasses import dataclass
 
 from loguru import logger
+
+from config.openrouter import get_client
 
 
 # ---------------------------------------------------------------------------
@@ -31,8 +31,6 @@ from loguru import logger
 
 @dataclass
 class RetrievalMetrics:
-    """Retrieval quality metrics for a single query."""
-
     query_id: str
     precision_at_k: float
     recall_at_k: float
@@ -42,54 +40,20 @@ class RetrievalMetrics:
 
 
 def precision_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
-    """
-    Compute Precision@K.
-
-    Args:
-        retrieved_ids: Ordered list of retrieved chunk IDs.
-        relevant_ids: Set of ground-truth relevant chunk IDs.
-        k: Cutoff rank.
-
-    Returns:
-        Fraction of top-K retrieved that are relevant.
-    """
     if not retrieved_ids:
         return 0.0
     top_k = retrieved_ids[:k]
-    relevant_in_top_k = sum(1 for rid in top_k if rid in relevant_ids)
-    return relevant_in_top_k / k
+    return sum(1 for rid in top_k if rid in relevant_ids) / k
 
 
 def recall_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
-    """
-    Compute Recall@K.
-
-    Args:
-        retrieved_ids: Ordered list of retrieved chunk IDs.
-        relevant_ids: Set of ground-truth relevant chunk IDs.
-        k: Cutoff rank.
-
-    Returns:
-        Fraction of relevant docs found in top-K.
-    """
     if not relevant_ids:
         return 1.0
     top_k = retrieved_ids[:k]
-    retrieved_relevant = sum(1 for rid in top_k if rid in relevant_ids)
-    return retrieved_relevant / len(relevant_ids)
+    return sum(1 for rid in top_k if rid in relevant_ids) / len(relevant_ids)
 
 
 def mean_reciprocal_rank(retrieved_ids: list[str], relevant_ids: set[str]) -> float:
-    """
-    Compute Mean Reciprocal Rank (MRR).
-
-    Args:
-        retrieved_ids: Ordered list of retrieved chunk IDs.
-        relevant_ids: Set of ground-truth relevant chunk IDs.
-
-    Returns:
-        1 / rank_of_first_relevant_doc, or 0 if none found.
-    """
     for rank, rid in enumerate(retrieved_ids, start=1):
         if rid in relevant_ids:
             return 1.0 / rank
@@ -97,18 +61,16 @@ def mean_reciprocal_rank(retrieved_ids: list[str], relevant_ids: set[str]) -> fl
 
 
 # ---------------------------------------------------------------------------
-# Generation Metrics (LLM-as-Judge)
+# Generation Metrics (LLM-as-Judge via OpenRouter)
 # ---------------------------------------------------------------------------
 
 @dataclass
 class GenerationMetrics:
-    """LLM-judged generation quality metrics for a single query."""
-
     query_id: str
-    faithfulness: float        # 0-1: Is answer grounded in context?
-    answer_relevancy: float    # 0-1: Does answer address the question?
-    context_precision: float   # 0-1: Are retrieved chunks relevant?
-    context_recall: float      # 0-1: Did context contain all needed info?
+    faithfulness: float
+    answer_relevancy: float
+    context_precision: float
+    context_recall: float
 
 
 FAITHFULNESS_PROMPT = """You are evaluating a RAG system's answer for faithfulness.
@@ -122,7 +84,7 @@ GENERATED ANSWER: {answer}
 
 TASK: Rate how faithfully the answer is grounded in the provided context.
 - Score 1.0: Every claim in the answer is directly supported by the context
-- Score 0.5: Most claims are supported, but some may be inferred or extended
+- Score 0.5: Most claims are supported, but some may be inferred
 - Score 0.0: Answer contains significant information not present in context
 
 Respond with ONLY a JSON object: {{"score": <float 0.0-1.0>, "reason": "<brief explanation>"}}"""
@@ -149,7 +111,7 @@ RETRIEVED CONTEXT:
 
 TASK: What fraction of the retrieved context chunks are relevant to answering the question?
 - Score 1.0: All retrieved chunks are relevant
-- Score 0.5: About half the chunks are relevant  
+- Score 0.5: About half the chunks are relevant
 - Score 0.0: No chunks are relevant
 
 Respond with ONLY a JSON object: {{"score": <float 0.0-1.0>, "reason": "<brief explanation>"}}"""
@@ -166,27 +128,33 @@ RETRIEVED CONTEXT:
 TASK: Does the retrieved context contain all the information needed to produce the ground truth answer?
 - Score 1.0: Context contains all necessary information
 - Score 0.5: Context contains some but not all necessary information
-- Score 0.0: Context is missing critical information needed for the answer
+- Score 0.0: Context is missing critical information
 
 Respond with ONLY a JSON object: {{"score": <float 0.0-1.0>, "reason": "<brief explanation>"}}"""
 
 
 class LLMJudge:
     """
-    Uses an LLM to score RAG responses on multiple dimensions.
-    
-    Implements the "LLM-as-judge" evaluation paradigm, similar to RAGAS.
+    Uses OpenRouter to score RAG responses on multiple dimensions.
+
+    Implements the "LLM-as-judge" evaluation paradigm (RAGAS-style).
+    Any OpenRouter model can be used as the judge.
     """
 
-    def __init__(self, model: str = "gpt-4o-mini"):
+    def __init__(self, model: str = "openai/gpt-4o-mini"):
+        """
+        Args:
+            model: OpenRouter model string for the judge.
+                   Recommended: 'openai/gpt-4o-mini' (fast + cheap)
+                   Higher quality: 'openai/gpt-4o' or 'anthropic/claude-sonnet-4-5'
+        """
         self.model = model
 
     def _judge(self, prompt: str) -> tuple[float, str]:
-        """Call LLM judge and parse score."""
+        """Call OpenRouter judge and parse score from JSON response."""
         import json
-        import openai
 
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = get_client()
         try:
             response = client.chat.completions.create(
                 model=self.model,
@@ -195,12 +163,11 @@ class LLMJudge:
                 max_tokens=256,
             )
             raw = response.choices[0].message.content.strip()
-            # Strip markdown code blocks if present
             raw = re.sub(r"```json\s*|\s*```", "", raw).strip()
             parsed = json.loads(raw)
             return float(parsed["score"]), parsed.get("reason", "")
         except Exception as e:
-            logger.warning(f"LLM judge error: {e}")
+            logger.warning(f"LLM judge error [{self.model}]: {e}")
             return 0.5, f"Error: {e}"
 
     def _format_context(self, context_chunks: list[str]) -> str:
@@ -209,39 +176,20 @@ class LLMJudge:
             for i, chunk in enumerate(context_chunks)
         )
 
-    def score_faithfulness(
-        self, question: str, answer: str, context_chunks: list[str]
-    ) -> tuple[float, str]:
+    def score_faithfulness(self, question: str, answer: str, context_chunks: list[str]) -> tuple[float, str]:
         context = self._format_context(context_chunks)
-        prompt = FAITHFULNESS_PROMPT.format(
-            question=question, context=context, answer=answer
-        )
-        return self._judge(prompt)
+        return self._judge(FAITHFULNESS_PROMPT.format(question=question, context=context, answer=answer))
 
-    def score_answer_relevancy(
-        self, question: str, answer: str
-    ) -> tuple[float, str]:
-        prompt = ANSWER_RELEVANCY_PROMPT.format(question=question, answer=answer)
-        return self._judge(prompt)
+    def score_answer_relevancy(self, question: str, answer: str) -> tuple[float, str]:
+        return self._judge(ANSWER_RELEVANCY_PROMPT.format(question=question, answer=answer))
 
-    def score_context_precision(
-        self, question: str, context_chunks: list[str]
-    ) -> tuple[float, str]:
+    def score_context_precision(self, question: str, context_chunks: list[str]) -> tuple[float, str]:
         context = self._format_context(context_chunks)
-        prompt = CONTEXT_PRECISION_PROMPT.format(question=question, context=context)
-        return self._judge(prompt)
+        return self._judge(CONTEXT_PRECISION_PROMPT.format(question=question, context=context))
 
-    def score_context_recall(
-        self,
-        question: str,
-        ground_truth: str,
-        context_chunks: list[str],
-    ) -> tuple[float, str]:
+    def score_context_recall(self, question: str, ground_truth: str, context_chunks: list[str]) -> tuple[float, str]:
         context = self._format_context(context_chunks)
-        prompt = CONTEXT_RECALL_PROMPT.format(
-            question=question, ground_truth=ground_truth, context=context
-        )
-        return self._judge(prompt)
+        return self._judge(CONTEXT_RECALL_PROMPT.format(question=question, ground_truth=ground_truth, context=context))
 
     def evaluate_sample(
         self,
@@ -252,7 +200,7 @@ class LLMJudge:
         ground_truth: str,
     ) -> GenerationMetrics:
         """
-        Run all generation metrics for a single sample.
+        Run all generation metrics for a single sample via OpenRouter.
 
         Args:
             query_id: Sample identifier.
@@ -269,6 +217,12 @@ class LLMJudge:
         precision, _ = self.score_context_precision(question, context_chunks)
         recall, _ = self.score_context_recall(question, ground_truth, context_chunks)
 
+        logger.debug(
+            f"[{query_id}] Judge [{self.model}]: "
+            f"faith={faithfulness:.2f} rel={relevancy:.2f} "
+            f"prec={precision:.2f} rec={recall:.2f}"
+        )
+
         return GenerationMetrics(
             query_id=query_id,
             faithfulness=faithfulness,
@@ -284,8 +238,6 @@ class LLMJudge:
 
 @dataclass
 class EvaluationSummary:
-    """Aggregated metrics across all evaluation samples."""
-
     num_samples: int
     avg_faithfulness: float
     avg_answer_relevancy: float
@@ -316,15 +268,11 @@ def compute_summary(
     generation_metrics: list[GenerationMetrics],
     retrieval_metrics: list[RetrievalMetrics],
 ) -> EvaluationSummary:
-    """Compute average metrics across all samples."""
-    n_gen = len(generation_metrics)
-    n_ret = len(retrieval_metrics)
-
     def avg(vals):
         return sum(vals) / len(vals) if vals else 0.0
 
     return EvaluationSummary(
-        num_samples=max(n_gen, n_ret),
+        num_samples=max(len(generation_metrics), len(retrieval_metrics)),
         avg_faithfulness=avg([m.faithfulness for m in generation_metrics]),
         avg_answer_relevancy=avg([m.answer_relevancy for m in generation_metrics]),
         avg_context_precision=avg([m.context_precision for m in generation_metrics]),

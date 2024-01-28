@@ -19,10 +19,11 @@ ingestion:
     - ".txt"
 
 # --- Embedding ---
+# NOTE: OpenRouter does NOT provide an embeddings API.
+# Embeddings always run locally via sentence-transformers (free, no API key needed).
 embedding:
-  provider: "sentence_transformers"   # Options: openai | sentence_transformers
+  provider: "sentence_transformers"   # Only option — OpenRouter has no embeddings endpoint
   model_name: "all-MiniLM-L6-v2"
-  # OpenAI alternative: "text-embedding-3-small"
   batch_size: 64
   cache_enabled: true
   cache_dir: ".cache/embeddings"
@@ -40,10 +41,10 @@ retrieval:
   strategy: "hybrid"   # Options: hybrid | dense | bm25 | hyde
   hyde_enabled: true
   mmr_enabled: true
-  mmr_lambda: 0.5         # Balance between relevance (1.0) and diversity (0.0)
-  bm25_weight: 0.3        # Weight for BM25 in hybrid search
-  dense_weight: 0.7       # Weight for dense vector in hybrid search
-  final_top_k: 5          # Documents returned after reranking
+  mmr_lambda: 0.5
+  bm25_weight: 0.3
+  dense_weight: 0.7
+  final_top_k: 5
 
 # --- Reranking ---
 reranking:
@@ -51,10 +52,19 @@ reranking:
   model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
   top_n: 5
 
-# --- Generation ---
+# --- Generation (via OpenRouter) ---
+# OpenRouter model format: "provider/model-name"
+# Popular options:
+#   openai/gpt-4o-mini          (fast, cheap — recommended default)
+#   openai/gpt-4o               (best OpenAI quality)
+#   anthropic/claude-sonnet-4-5 (strong reasoning)
+#   meta-llama/llama-3.1-70b-instruct (free tier available)
+#   google/gemini-flash-1.5     (very fast)
+#   mistralai/mistral-7b-instruct (lightweight)
 generation:
-  provider: "openai"
-  model: "gpt-4o-mini"
+  provider: "openrouter"
+  model: "openai/gpt-4o-mini"
+  base_url: "https://openrouter.ai/api/v1"
   temperature: 0.0
   max_tokens: 1024
   streaming: true
@@ -66,7 +76,7 @@ generation:
 # --- Query Rewriting ---
 query_rewriting:
   enabled: true
-  model: "gpt-4o-mini"
+  model: "openai/gpt-4o-mini"   # OpenRouter model format
   num_variants: 3
 
 # --- Evaluation ---
@@ -74,6 +84,7 @@ evaluation:
   dataset_path: "evaluation/dataset.json"
   results_path: "evaluation/results.json"
   report_path: "evaluation/report.md"
+  judge_model: "openai/gpt-4o-mini"   # OpenRouter model for LLM-as-judge
   metrics:
     - faithfulness
     - answer_relevancy

@@ -4,27 +4,27 @@ RAG Generation Pipeline
 Orchestrates the full Retrieve → Rerank → Generate → Cite pipeline.
 
 Features:
-  - Configurable LLM backend (OpenAI)
-  - Streaming support
+  - OpenRouter as LLM backend (200+ models via unified API)
+  - Streaming support via Server-Sent Events
   - Source attribution in every response
   - Query rewriting for improved retrieval coverage
-  - Guardrails against hallucination (low-confidence detection)
+  - Guardrails against hallucination (context-grounded prompts)
   - Response caching
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import pickle
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Generator, Iterator, Optional, Union
+from typing import Iterator, Optional, Union
 
 from loguru import logger
 
+from config.openrouter import get_client
 from ingestion.chunking import DocumentChunk
 from reranking.cross_encoder import CrossEncoderReranker, PassThroughReranker
 from retrieval.base_retriever import BaseRetriever, RetrievalResult
@@ -49,7 +49,7 @@ class SourceReference:
         return {
             "document": self.document,
             "chunk_id": self.chunk_id,
-            "text": self.text[:300],  # Truncate for response
+            "text": self.text[:300],
             "chunk_index": self.chunk_index,
             "page_number": self.page_number,
         }
@@ -83,18 +83,16 @@ class RAGResponse:
 class QueryRewriter:
     """
     Generates multiple reformulations of a query to improve retrieval recall.
-
-    Uses an LLM to produce diverse phrasings of the same intent, then
-    retrieves for all variants and merges results.
+    Uses OpenRouter for LLM calls.
     """
 
-    def __init__(self, model: str = "gpt-4o-mini", num_variants: int = 3):
+    def __init__(self, model: str = "openai/gpt-4o-mini", num_variants: int = 3):
         self.model = model
         self.num_variants = num_variants
 
     def rewrite(self, query: str) -> list[str]:
         """
-        Generate query variants.
+        Generate query variants via OpenRouter.
 
         Args:
             query: Original user query.
@@ -103,14 +101,12 @@ class QueryRewriter:
             List of [original] + [variants].
         """
         try:
-            import openai
-            client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            client = get_client()
             prompt = (
                 f"Generate {self.num_variants} different phrasings of the following "
                 f"question. Each rephrasing should preserve the intent but use "
                 f"different vocabulary or structure. Return ONLY the questions, "
-                f"one per line, no numbering.\n\n"
-                f"Question: {query}"
+                f"one per line, no numbering.\n\nQuestion: {query}"
             )
             response = client.chat.completions.create(
                 model=self.model,
@@ -123,7 +119,7 @@ class QueryRewriter:
                 for line in response.choices[0].message.content.strip().split("\n")
                 if line.strip()
             ]
-            logger.debug(f"Query rewriter: {len(variants)} variants generated")
+            logger.debug(f"Query rewriter ({self.model}): {len(variants)} variants")
             return [query] + variants[: self.num_variants]
         except Exception as e:
             logger.warning(f"Query rewriting failed: {e}")
@@ -148,7 +144,7 @@ class ResponseCache:
         path = self._cache_dir / f"{self._key(query)}.pkl"
         if path.exists():
             with path.open("rb") as f:
-                logger.debug(f"Cache HIT for query: {query[:60]}")
+                logger.debug(f"Cache HIT: {query[:60]}")
                 return pickle.load(f)
         return None
 
@@ -166,12 +162,8 @@ class RAGPipeline:
     """
     Full RAG pipeline: query → retrieve → rerank → generate → cite.
 
-    Supports:
-      - Multiple retrieval strategies
-      - Query rewriting
-      - Streaming generation
-      - Response caching
-      - Source attribution
+    Uses OpenRouter for all LLM calls (generation + query rewriting).
+    Embeddings always run locally via sentence-transformers.
     """
 
     SYSTEM_PROMPT = """You are a precise and helpful research assistant.
@@ -190,7 +182,7 @@ CONTEXT:
         self,
         retriever: BaseRetriever,
         reranker: Union[CrossEncoderReranker, PassThroughReranker],
-        llm_model: str = "gpt-4o-mini",
+        llm_model: str = "openai/gpt-4o-mini",
         temperature: float = 0.0,
         max_tokens: int = 1024,
         streaming: bool = False,
@@ -201,12 +193,12 @@ CONTEXT:
         Args:
             retriever: Configured retrieval strategy.
             reranker: Cross-encoder or pass-through reranker.
-            llm_model: OpenAI model for generation.
+            llm_model: OpenRouter model string (e.g. 'openai/gpt-4o-mini').
             temperature: LLM temperature (0 = deterministic).
             max_tokens: Max tokens in response.
             streaming: Whether to stream the response.
-            query_rewriting_enabled: Whether to rewrite queries.
-            cache_enabled: Whether to cache responses.
+            query_rewriting_enabled: Whether to rewrite queries before retrieval.
+            cache_enabled: Whether to cache responses to disk.
         """
         self.retriever = retriever
         self.reranker = reranker
@@ -214,7 +206,7 @@ CONTEXT:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.streaming = streaming
-        self.query_rewriter = QueryRewriter() if query_rewriting_enabled else None
+        self.query_rewriter = QueryRewriter(model=llm_model) if query_rewriting_enabled else None
         self.cache = ResponseCache() if cache_enabled else None
 
     def _build_context(self, chunks: list[DocumentChunk]) -> str:
@@ -245,10 +237,8 @@ CONTEXT:
         ]
 
     def _generate(self, query: str, context: str) -> str:
-        """Call the LLM to generate an answer."""
-        import openai
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+        """Call OpenRouter to generate an answer."""
+        client = get_client()
         system = self.SYSTEM_PROMPT.format(context=context)
         response = client.chat.completions.create(
             model=self.llm_model,
@@ -262,10 +252,8 @@ CONTEXT:
         return response.choices[0].message.content.strip()
 
     def _generate_streaming(self, query: str, context: str) -> Iterator[str]:
-        """Stream the LLM response token by token."""
-        import openai
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+        """Stream the response token by token via OpenRouter."""
+        client = get_client()
         system = self.SYSTEM_PROMPT.format(context=context)
         with client.chat.completions.stream(
             model=self.llm_model,
@@ -280,12 +268,7 @@ CONTEXT:
                 yield text
 
     def _retrieve_with_rewriting(self, query: str) -> RetrievalResult:
-        """
-        Retrieve with optional query rewriting.
-
-        If rewriting is enabled, retrieves for all query variants and
-        merges results using deduplication by chunk_id.
-        """
+        """Retrieve with optional multi-query expansion."""
         if self.query_rewriter is None:
             return self.retriever.retrieve(query)
 
@@ -299,9 +282,7 @@ CONTEXT:
                     all_chunks[chunk.chunk_id] = chunk
 
         merged = list(all_chunks.values())
-        logger.info(
-            f"Query rewriting: {len(queries)} queries → {len(merged)} unique chunks"
-        )
+        logger.info(f"Query rewriting: {len(queries)} queries → {len(merged)} unique chunks")
 
         return RetrievalResult(
             chunks=merged,
@@ -317,34 +298,27 @@ CONTEXT:
             question: User question.
 
         Returns:
-            RAGResponse with answer and citations.
+            RAGResponse with grounded answer and citations.
         """
         start_time = time.monotonic()
 
-        # --- Cache check ---
+        # Cache check
         if self.cache:
             cached = self.cache.get(question)
             if cached:
                 logger.info("Returning cached response.")
                 return cached
 
-        logger.info(f"RAG query: '{question[:80]}'")
+        logger.info(f"RAG query [{self.llm_model}]: '{question[:80]}'")
 
-        # --- Retrieval ---
         retrieval_result = self._retrieve_with_rewriting(question)
         logger.info(f"Retrieved {len(retrieval_result.chunks)} chunks")
 
-        # --- Reranking ---
         reranked = self.reranker.rerank(question, retrieval_result.chunks)
         logger.info(f"After reranking: {len(reranked)} chunks")
 
-        # --- Build context ---
         context = self._build_context(reranked)
-
-        # --- Generation ---
         answer = self._generate(question, context)
-
-        # --- Build response ---
         sources = self._extract_sources(reranked)
         latency = (time.monotonic() - start_time) * 1000
 
@@ -354,6 +328,7 @@ CONTEXT:
             query=question,
             retrieval_strategy=retrieval_result.strategy,
             latency_ms=latency,
+            metadata={"model": self.llm_model},
         )
 
         logger.success(
@@ -361,15 +336,12 @@ CONTEXT:
             f"{len(sources)} sources, {latency:.0f}ms"
         )
 
-        # --- Cache store ---
         if self.cache:
             self.cache.set(question, response)
 
         return response
 
-    def query_stream(
-        self, question: str
-    ) -> tuple[Iterator[str], list[SourceReference]]:
+    def query_stream(self, question: str) -> tuple[Iterator[str], list[SourceReference]]:
         """
         Stream the answer while returning sources immediately.
 
@@ -379,11 +351,9 @@ CONTEXT:
         Returns:
             Tuple of (token iterator, source references).
         """
-        # Retrieve and rerank
         retrieval_result = self._retrieve_with_rewriting(question)
         reranked = self.reranker.rerank(question, retrieval_result.chunks)
         context = self._build_context(reranked)
         sources = self._extract_sources(reranked)
-
         token_iter = self._generate_streaming(question, context)
         return token_iter, sources

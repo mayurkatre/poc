@@ -126,8 +126,10 @@ pip install -r requirements.txt
 ### Step 2 — Configure
 
 ```bash
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+cp .env.example .env  # Add your OpenRouter key (sk-or-v1-...)
+# Add your OpenRouter key — get it free at openrouter.ai/keys
+# OPENAI_API_KEY=sk-or-v1-...
+# OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
 ### Step 3 — Ingest Documents

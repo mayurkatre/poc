@@ -315,3 +315,43 @@ User Query
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
+
+
+
+
+
+after the execution :
+
+1. Environment Setup
+Created .env file with your OpenRouter API key: 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
+Installed all required Python packages from requirements.txt
+Resolved Windows Long Path issues during installation
+
+2. Document Ingestion ✅
+
+Successfully ingested 2 documents:
+rag_overview.md → 23 chunks
+retrieval_strategies.md → 33 chunks
+Total: 56 chunks indexed using FAISS vector store
+Built BM25 hybrid search index
+
+3. Query Test ✅
+Ran the query: "What is RAG?"Results:
+Answer Generated: "Retrieval-Augmented Generation (RAG) is a technique that enhances large language models (LLMs) by grounding their responses in retrieved external knowledge."
+Sources Retrieved: 5 relevant chunks from the documents
+Retrieval Strategy: HybridRetriever with query rewriting
+Latency: ~33 seconds (includes model download time)
+Key Features Working:
+✅ Semantic chunking
+✅ FAISS vector indexing
+✅ Hybrid search (dense + BM25)
+✅ MMR (Maximal Marginal Relevance) reranking
+✅ Cross-encoder reranking
+✅ Query rewriting with LLM
+✅ OpenRouter API integrationThe system is now ready to use! You can ask more questions with:
+bash
+python query.py "Your question here"
+Or use interactive mode:
+bash
+python query.py --interactive

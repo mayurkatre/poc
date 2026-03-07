@@ -7,7 +7,7 @@ import { Send, Settings, BookOpen, Activity, AlertCircle, CheckCircle } from 'lu
 import './App.css';
 
 // API base URL
-const API_BASE = '/api';
+const API_BASE = '';
 
 // Types
 interface Source {
@@ -66,7 +66,7 @@ function App() {
   const [temperature, setTemperature] = useState(0.0);
 
   // Queries
-  const { data: health, isLoading: healthLoading, error: healthError } = useQuery({
+  const { data: health, isLoading: healthLoading } = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
     refetchInterval: 30000, // Check every 30 seconds
@@ -274,7 +274,7 @@ function App() {
                     Sources ({queryMutation.data.sources.length})
                   </h3>
 
-                  {queryMutation.data.sources.map((source, index) => (
+                  {queryMutation.data.sources.map((source) => (
                     <div key={source.chunk_id} className="source-item">
                       <div className="source-header">
                         <span className="source-document">{source.document}</span>

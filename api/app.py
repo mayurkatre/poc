@@ -240,13 +240,18 @@ app.add_middleware(
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
     """Health check endpoint."""
-    indexed = (
-        len(app_state.vector_store)
-        if app_state.vector_store
-        else 0
-    )
+    indexed = 0
+    if app_state.vector_store:
+        # Try multiple ways to get chunk count
+        if hasattr(app_state.vector_store, '_chunks'):
+            indexed = len(app_state.vector_store._chunks)
+        elif hasattr(app_state.vector_store, 'index') and app_state.vector_store.index:
+            indexed = app_state.vector_store.index.ntotal
+        else:
+            indexed = len(app_state.vector_store)
+    
     return HealthResponse(
-        status="healthy" if app_state.pipeline else "degraded",
+        status="healthy" if (app_state.pipeline and indexed > 0) else "degraded",
         version="1.0.0",
         indexed_chunks=indexed,
     )
@@ -259,8 +264,19 @@ async def get_stats():
         raise HTTPException(status_code=503, detail="Pipeline not initialized")
 
     cfg = config.get_settings()
+    
+    # Get indexed chunks count safely
+    indexed = 0
+    if app_state.vector_store:
+        if hasattr(app_state.vector_store, '_chunks'):
+            indexed = len(app_state.vector_store._chunks)
+        elif hasattr(app_state.vector_store, 'index') and app_state.vector_store.index:
+            indexed = app_state.vector_store.index.ntotal
+        else:
+            indexed = len(app_state.vector_store)
+    
     return StatsResponse(
-        indexed_chunks=len(app_state.vector_store) if app_state.vector_store else 0,
+        indexed_chunks=indexed,
         embedding_provider=cfg.get("embedding", {}).get("provider", "unknown"),
         vector_store_provider=cfg.get("vector_store", {}).get("provider", "unknown"),
         retrieval_strategy=cfg.get("retrieval", {}).get("strategy", "hybrid"),

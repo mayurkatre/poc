@@ -1,10 +1,27 @@
-# RAG POC — Production-Inspired Retrieval-Augmented Generation System
+# 🤖 RAG POC — Full Stack RAG System with React Frontend
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green.svg)](https://fastapi.tiangolo.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com)
+[![React 18](https://img.shields.io/badge/React-18-blue.svg)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A production-inspired, modular RAG system demonstrating advanced retrieval techniques, evaluation methodology, and engineering best practices.
+A **production-ready, full-stack RAG system** with modern React frontend and FastAPI backend, demonstrating advanced retrieval techniques, evaluation methodology, and engineering best practices.
+
+## 🎯 What's New - Full Stack!
+
+This project now includes a **beautiful, modern React frontend** with:
+- 🎨 Real-time query interface
+- ⚙️ Advanced configuration controls  
+- 📚 Live source viewer
+- 📱 Responsive design
+- 🔄 Live system status
+
+Plus an **enhanced FastAPI backend** with:
+- 🔧 Dynamic pipeline configuration
+- 🌊 Streaming responses (SSE)
+- 🎛️ Advanced query parameters
+- 📊 Comprehensive API docs
 
 ---
 
@@ -55,72 +72,105 @@ A production-inspired, modular RAG system demonstrating advanced retrieval techn
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 rag-poc/
 │
-├── ingestion/
-│   ├── document_loader.py      # PDF, MD, TXT, URL loaders with factory pattern
-│   ├── chunking.py             # Fixed, sentence, and semantic chunking strategies
-│   └── embedding_pipeline.py  # OpenAI + sentence-transformers, FAISS + Chroma
-│
-├── retrieval/
-│   ├── base_retriever.py       # Abstract retriever interface
-│   ├── hyde_retriever.py       # Hypothetical Document Embeddings (HyDE)
-│   ├── hybrid_search.py        # Dense + BM25 + RRF fusion + MMR
-│   └── mmr.py                  # Maximum Marginal Relevance algorithm
-│
-├── reranking/
-│   └── cross_encoder.py        # Cross-encoder reranker (ms-marco-MiniLM)
-│
-├── generation/
-│   └── rag_pipeline.py         # Full pipeline: retrieve → rerank → generate → cite
+├── frontend/                   # ⭐ NEW! React Frontend
+│   ├── src/
+│   │   ├── App.tsx            # Main React component
+│   │   ├── App.css            # Component styles
+│   │   ├── index.css          # Global styles
+│   │   └── main.tsx           # Entry point
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── README.md              # Frontend-specific docs
 │
 ├── api/
-│   └── app.py                  # FastAPI endpoints with streaming and lifespan
+│   └── app.py                 # Enhanced FastAPI backend
+│                              # - Dynamic pipeline config
+│                              # - Streaming SSE support
+│                              # - Advanced query params
 │
-├── evaluation/
-│   ├── dataset.json            # 10-sample evaluation dataset
-│   ├── metrics.py              # Retrieval + generation metrics (LLM-as-judge)
-│   └── evaluate.py             # Evaluation runner with Rich progress UI
+├── ingestion/
+│   ├── document_loader.py     # PDF, MD, TXT, URL loaders
+│   ├── chunking.py            # Semantic/sentence/fixed chunking
+│   └── embedding_pipeline.py  # Embeddings + FAISS/Chroma
 │
-├── adr/
-│   ├── ADR-001-vector-database.md
-│   ├── ADR-002-retrieval-strategy.md
-│   ├── ADR-003-chunking-strategy.md
-│   ├── ADR-004-embedding-model.md
-│   └── ADR-005-reranking-approach.md
+├── retrieval/
+│   ├── base_retriever.py      # Abstract retriever interface
+│   ├── hyde_retriever.py      # HyDE retrieval
+│   ├── hybrid_search.py       # Dense + BM25 + RRF
+│   └── mmr.py                 # Maximal Marginal Relevance
 │
-├── config/
-│   └── settings.yaml           # Full system configuration
+├── reranking/
+│   └── cross_encoder.py       # Cross-encoder reranking
 │
-├── tests/
-│   ├── test_ingestion.py       # Loader and chunker unit tests
-│   ├── test_retrieval.py       # BM25, MMR, RRF unit tests
-│   └── test_api.py             # FastAPI endpoint tests
+├── generation/
+│   └── rag_pipeline.py        # Full RAG pipeline
 │
-├── documents/                  # Sample documents for ingestion
-├── ingest.py                   # CLI: ingest documents into vector store
-├── query.py                    # CLI: interactive and single-shot querying
+├── evaluation/                # RAGAS-style evaluation
+├── adr/                       # Architecture Decision Records
+├── config/                    # Configuration
+├── tests/                     # Unit tests
+├── documents/                 # Sample documents
+│
+├── ingest.py                  # CLI ingestion
+├── query.py                   # CLI querying
+├── start-fullstack.ps1        # Windows startup script
+├── start-fullstack.sh         # Linux/Mac startup script
+├── RUN_FULLSTACK.md           # Detailed full-stack guide
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-### Step 1 — Install Dependencies
+### Option A: Full Stack (Recommended)
 
+**Start both frontend and backend:**
+
+Windows PowerShell:
+```powershell
+.\start-fullstack.ps1
+```
+
+Linux/Mac:
 ```bash
-git clone https://github.com/your-org/rag-poc.git
-cd rag-poc
+chmod +x start-fullstack.sh
+./start-fullstack.sh
+```
 
+This will automatically:
+1. ✅ Check all dependencies
+2. ✅ Ingest documents if needed
+3. ✅ Start FastAPI backend (port 8000)
+4. ✅ Start React frontend (port 3000)
+
+Then visit: **http://localhost:3000** 🎨
+
+### Option B: Manual Setup
+
+#### Step 1 — Install Dependencies
+
+**Backend:**
+```bash
+git clone https://github.com/mayurkatre/poc.git
+cd poc
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
 pip install -r requirements.txt
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install
 ```
 
 ### Step 2 — Configure
@@ -193,7 +243,21 @@ curl -X POST http://localhost:8000/query \
 }
 ```
 
-### Step 6 — Run Evaluation
+### Step 6 — Use the Web Interface 🎨
+
+With both servers running (backend on port 8000, frontend on port 3000):
+
+1. **Open your browser**: http://localhost:3000
+2. **Type your question** in the query box
+3. **Adjust settings** (optional):
+   - Enable HyDE for better retrieval
+   - Disable reranking for speed
+   - Set Top-K results
+   - Adjust temperature
+4. **Click "Ask RAG"**
+5. **View answer** with cited sources
+
+### Step 7 — Run Evaluation
 
 ```bash
 # Full evaluation with LLM judge

@@ -49,6 +49,9 @@ class QueryRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=1000, description="User question")
     top_k: Optional[int] = Field(None, ge=1, le=20, description="Override final top_k")
     strategy: Optional[str] = Field(None, description="Override retrieval strategy")
+    use_hyde: Optional[bool] = Field(False, description="Use HyDE retrieval")
+    no_rerank: Optional[bool] = Field(False, description="Disable reranking")
+    temperature: Optional[float] = Field(None, ge=0.0, le=1.0, description="LLM temperature")
 
 
 class SourceModel(BaseModel):
@@ -275,7 +278,63 @@ async def query(request: QueryRequest):
         raise HTTPException(status_code=503, detail="Pipeline not initialized. Run ingest first.")
 
     try:
-        response: RAGResponse = app_state.pipeline.query(request.question)
+        # Build custom pipeline if advanced options are used
+        if request.use_hyde or request.no_rerank or request.temperature is not None:
+            from retrieval.hyde_retriever import HyDERetriever
+            
+            cfg = config.get_settings()
+            emb_cfg = cfg.get("embedding", {})
+            vs_cfg = cfg.get("vector_store", {})
+            ret_cfg = cfg.get("retrieval", {})
+            rr_cfg = cfg.get("reranking", {})
+            gen_cfg = cfg.get("generation", {})
+            
+            # Use existing embedder and vector store
+            embedder = app_state.embedding_pipeline.embedder
+            vector_store = app_state.vector_store
+            
+            # Create retriever based on options
+            if request.use_hyde:
+                retriever = HyDERetriever(
+                    vector_store=vector_store,
+                    embedding_pipeline=app_state.embedding_pipeline,
+                    top_k=vs_cfg.get("top_k", 20),
+                    llm_model=gen_cfg.get("model", "gpt-4o-mini"),
+                )
+            else:
+                retriever = HybridRetriever(
+                    vector_store=vector_store,
+                    embedding_pipeline=app_state.embedding_pipeline,
+                    bm25_index=app_state.bm25_index,
+                    top_k=vs_cfg.get("top_k", 20),
+                    final_top_k=request.top_k or ret_cfg.get("final_top_k", 5),
+                    use_mmr=ret_cfg.get("mmr_enabled", True),
+                )
+            
+            # Create reranker
+            reranker = create_reranker(
+                enabled=not request.no_rerank and rr_cfg.get("enabled", True),
+                model=rr_cfg.get("model", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+                top_n=rr_cfg.get("top_n", 5),
+            )
+            
+            # Create custom pipeline
+            custom_pipeline = RAGPipeline(
+                retriever=retriever,
+                reranker=reranker,
+                llm_model=gen_cfg.get("model", "openai/gpt-4o-mini"),
+                temperature=request.temperature if request.temperature is not None else gen_cfg.get("temperature", 0.0),
+                max_tokens=gen_cfg.get("max_tokens", 1024),
+                streaming=gen_cfg.get("streaming", True),
+                query_rewriting_enabled=cfg.get("query_rewriting", {}).get("enabled", True),
+                cache_enabled=True,
+            )
+            
+            response: RAGResponse = custom_pipeline.query(request.question)
+        else:
+            # Use default pipeline
+            response: RAGResponse = app_state.pipeline.query(request.question)
+        
         return QueryResponse(
             answer=response.answer,
             sources=[SourceModel(**s.to_dict()) for s in response.sources],

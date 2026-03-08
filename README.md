@@ -376,9 +376,6 @@ User Query
 
 ---
 
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
 
 
 
@@ -387,7 +384,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 after the execution :
 
-1. Environment SetupCreated .env file with your OpenRouter API key:....
+1. Environment SetupCreated .env file with your OpenRouter API key:.......
 Installed all required Python packages from requirements.txt
 Resolved Windows Long Path issues during installation
 

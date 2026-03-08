@@ -387,12 +387,11 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 after the execution :
 
-1. Environment Setup
-Created .env file with your OpenRouter API key: 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
+1. Environment SetupCreated .env file with your OpenRouter API key:....
 Installed all required Python packages from requirements.txt
 Resolved Windows Long Path issues during installation
 
-2. Document Ingestion ✅
+3. Document Ingestion ✅
 
 Successfully ingested 2 documents:
 rag_overview.md → 23 chunks

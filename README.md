@@ -10,6 +10,11 @@ A **production-ready, full-stack RAG system** with modern React frontend and Fas
 
 ##demo video in CLI for testing of RAG
 https://drive.google.com/file/d/10ps95Fz5a2wiED30P_mLMqcsoZSvFOGX/view?usp=sharing
+IMG OF fRONTEND
+<img width="1886" height="886" alt="Screenshot 2026-03-08 103937" src="https://github.com/user-attachments/assets/7d989160-189f-47e7-857f-9465bc72456b" />
+
+<img width="1888" height="898" alt="image" src="https://github.com/user-attachments/assets/f9a559ea-4496-47c5-899a-f63814e47a50" />
+
 
 ## 🎯 What's New - Full Stack!
 

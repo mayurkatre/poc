@@ -8,6 +8,9 @@
 
 A **production-ready, full-stack RAG system** with modern React frontend and FastAPI backend, demonstrating advanced retrieval techniques, evaluation methodology, and engineering best practices.
 
+##demo video in CLI for testing of RAG
+https://drive.google.com/file/d/10ps95Fz5a2wiED30P_mLMqcsoZSvFOGX/view?usp=sharing
+
 ## 🎯 What's New - Full Stack!
 
 This project now includes a **beautiful, modern React frontend** with:

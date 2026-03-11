@@ -1,4 +1,4 @@
-# RAG System - Full Stack Startup Script (PowerShell)
+﻿# RAG System - Full Stack Startup Script (PowerShell)
 # Starts both FastAPI backend and React frontend
 
 Write-Host "🚀 Starting RAG System - Full Stack" -ForegroundColor Cyan

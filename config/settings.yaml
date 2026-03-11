@@ -63,7 +63,7 @@ reranking:
 #   mistralai/mistral-7b-instruct (lightweight)
 generation:
   provider: "openrouter"
-  model: "openai/gpt-4o-mini"
+  model: "arcee-ai/trinity-large-preview:free"
   base_url: "https://openrouter.ai/api/v1"
   temperature: 0.0
   max_tokens: 1024
@@ -76,7 +76,7 @@ generation:
 # --- Query Rewriting ---
 query_rewriting:
   enabled: true
-  model: "openai/gpt-4o-mini"   # OpenRouter model format
+  model: "arcee-ai/trinity-large-preview:free"   # OpenRouter model format
   num_variants: 3
 
 # --- Evaluation ---
@@ -84,7 +84,7 @@ evaluation:
   dataset_path: "evaluation/dataset.json"
   results_path: "evaluation/results.json"
   report_path: "evaluation/report.md"
-  judge_model: "openai/gpt-4o-mini"   # OpenRouter model for LLM-as-judge
+  judge_model: "arcee-ai/trinity-large-preview:free"   # OpenRouter model for LLM-as-judge
   metrics:
     - faithfulness
     - answer_relevancy

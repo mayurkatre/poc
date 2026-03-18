@@ -33,7 +33,7 @@ The system supports both via an abstract `BaseVectorStore` interface, selectable
 | **Pinecone** | Fully managed, scales to billions of vectors, built-in metadata | Paid service, external dependency, adds network latency | ❌ Rejected for POC (cost) |
 | **Weaviate** | Rich schema support, multimodal, GraphQL interface | Complex setup, overkill for POC | ❌ Rejected (complexity) |
 | **pgvector** | Leverages existing PostgreSQL, ACID compliance | Slower vector search than purpose-built FAISS | ❌ Rejected (latency) |
-| **Qdrant** | Rust-based, fast, rich filtering, on-premise or cloud | Less established ecosystem | ❌ Rejected (maturity risk) |
+| **Qdrant** | Rust-based, fast, rich filtering, on-premise or cloud | Less established ecosystem | ❌ Rejected (maturity risk) |   
 
 ## Rationale
 

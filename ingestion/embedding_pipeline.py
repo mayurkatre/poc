@@ -409,22 +409,168 @@ class ChromaVectorStore(BaseVectorStore):
         return self._get_collection().count()
 
 
+class PineconeVectorStore(BaseVectorStore):
+    """
+    Pinecone-based vector store.
+    
+    Uses Pinecone's managed vector database for scalable storage and retrieval.
+    """
+    
+    def __init__(
+        self,
+        api_key: str,
+        environment: str = "us-west-2-gcp",
+        index_name: str = "rag-documents",
+        namespace: str = "default",
+        dimension: int = 384,
+    ):
+        """
+        Args:
+            api_key: Pinecone API key.
+            environment: Pinecone environment (e.g., "us-west-2-gcp").
+            index_name: Name of the Pinecone index.
+            namespace: Pinecone namespace (partition within index).
+            dimension: Embedding dimension.
+        """
+        import pinecone
+        
+        # Initialize Pinecone
+        pinecone.init(api_key=api_key, environment=environment)
+        
+        # Create index if it doesn't exist
+        if index_name not in pinecone.list_indexes():
+            logger.info(f"Creating Pinecone index: {index_name}")
+            pinecone.create_index(
+                name=index_name,
+                dimension=dimension,
+                metric="cosine",
+            )
+        
+        # Connect to index
+        self._index = pinecone.Index(index_name)
+        self._namespace = namespace
+        self._dimension = dimension
+        self._chunks = []  # Local cache for compatibility
+        
+        logger.info(f"Connected to Pinecone index: {index_name} (dim={dimension})")
+    
+    def add(self, chunks: list[DocumentChunk], embeddings: list[list[float]]) -> None:
+        """
+        Add documents with embeddings to Pinecone.
+        
+        Args:
+            chunks: List of DocumentChunk objects.
+            embeddings: Corresponding embedding vectors.
+        """
+        vectors_to_upsert = []
+        
+        for chunk, embedding in zip(chunks, embeddings):
+            # Create metadata
+            metadata = {
+                "text": chunk.text,
+                "source": chunk.source,
+                "doc_type": chunk.doc_type,
+                "chunk_index": chunk.chunk_index,
+                **chunk.metadata,
+            }
+            
+            # Create vector tuple (id, values, metadata)
+            vectors_to_upsert.append((
+                chunk.chunk_id,
+                embedding,
+                metadata,
+            ))
+        
+        # Upsert in batches
+        batch_size = 100
+        for i in range(0, len(vectors_to_upsert), batch_size):
+            batch = vectors_to_upsert[i:i + batch_size]
+            self._index.upsert(vectors=batch, namespace=self._namespace)
+        
+        # Update local cache
+        self._chunks.extend(chunks)
+        logger.info(f"Pinecone: upserted {len(chunks)} vectors")
+    
+    def search(self, query_embedding: list[float], top_k: int = 5) -> list[DocumentChunk]:
+        """
+        Search for similar documents using cosine similarity.
+        
+        Args:
+            query_embedding: Query vector.
+            top_k: Number of results.
+        
+        Returns:
+            List of DocumentChunk objects.
+        """
+        # Search Pinecone
+        results = self._index.query(
+            vector=[query_embedding],
+            top_k=top_k,
+            include_metadata=True,
+            include_values=False,
+            namespace=self._namespace,
+        )
+        
+        # Convert to DocumentChunk objects
+        chunks = []
+        for match in results.matches:
+            meta = match.metadata or {}
+            chunk = DocumentChunk(
+                chunk_id=match.id,
+                text=meta.get("text", ""),
+                source=meta.get("source", ""),
+                doc_type=meta.get("doc_type", ""),
+                chunk_index=int(meta.get("chunk_index", 0)),
+                metadata={
+                    "retrieval_score": match.score,
+                    "page_number": meta.get("page_number"),
+                },
+            )
+            chunks.append(chunk)
+        
+        return chunks
+    
+    def save(self) -> None:
+        """Pinecone auto-persists; this is a no-op."""
+        logger.debug("Pinecone: auto-persisted")
+    
+    def load(self) -> None:
+        """Load chunk count from Pinecone."""
+        stats = self._index.describe_index_stats()
+        total_count = stats.get("total_vector_count", 0)
+        logger.info(f"Pinecone: loaded {total_count} vectors")
+    
+    def __len__(self) -> int:
+        """Return total number of vectors in Pinecone."""
+        stats = self._index.describe_index_stats()
+        return stats.get("total_vector_count", 0)
+
+
 def create_vector_store(
     provider: str = "faiss",
     index_path: str = ".cache/faiss_index",
     chroma_persist_dir: str = ".cache/chroma",
     collection_name: str = "rag_documents",
     dimension: int = 384,
+    # Pinecone parameters
+    pinecone_api_key: Optional[str] = None,
+    pinecone_environment: str = "us-west-2-gcp",
+    pinecone_index_name: str = "rag-documents",
+    pinecone_namespace: str = "default",
 ) -> BaseVectorStore:
     """
     Factory function for vector stores.
 
     Args:
-        provider: 'faiss' or 'chroma'.
+        provider: 'faiss', 'chroma', or 'pinecone'.
         index_path: FAISS index directory.
         chroma_persist_dir: ChromaDB persist path.
         collection_name: ChromaDB collection name.
-        dimension: Embedding dimension (required for FAISS).
+        dimension: Embedding dimension (required for FAISS and Pinecone).
+        pinecone_api_key: Pinecone API key (required for Pinecone).
+        pinecone_environment: Pinecone environment.
+        pinecone_index_name: Pinecone index name.
+        pinecone_namespace: Pinecone namespace.
 
     Returns:
         BaseVectorStore instance.
@@ -434,6 +580,16 @@ def create_vector_store(
     elif provider == "chroma":
         return ChromaVectorStore(
             persist_dir=chroma_persist_dir, collection_name=collection_name
+        )
+    elif provider == "pinecone":
+        if not pinecone_api_key:
+            raise ValueError("pinecone_api_key is required for Pinecone provider")
+        return PineconeVectorStore(
+            api_key=pinecone_api_key,
+            environment=pinecone_environment,
+            index_name=pinecone_index_name,
+            namespace=pinecone_namespace,
+            dimension=dimension,
         )
     else:
         raise ValueError(f"Unknown vector store provider: {provider}")

@@ -30,11 +30,16 @@ embedding:
 
 # --- Vector Store ---
 vector_store:
-  provider: "faiss"   # Options: faiss | chroma
+  provider: "pinecone"   # Options: faiss | chroma | pinecone
   index_path: ".cache/faiss_index"
   chroma_persist_dir: ".cache/chroma"
   collection_name: "rag_documents"
   top_k: 20   # Initial candidates before reranking
+  # Pinecone settings
+  pinecone_api_key: "${PINECONE_API_KEY}"
+  pinecone_environment: "us-west-2-gcp"
+  pinecone_index_name: "rag-documents"
+  pinecone_namespace: "default"
 
 # --- Retrieval ---
 retrieval:
